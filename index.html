@@ -117,7 +117,7 @@
             max-font-size: 5rem;
             margin: 0 0 20px 0;
             text-align: center;
-            line-height: 0.85;
+            line-height: 1.25; /* Increased spacing */
             color: #fff;
         }
         @media (min-width: 600px) {
@@ -194,12 +194,13 @@
 </div>
 <script>
 const CONSTANTS = {
-    LOG_RADIUS_RATIO: 0.17, 
+    LOG_RADIUS_RATIO: 0.34, 
     KNIFE_SPEED_RATIO: 0.18, 
     KNIFE_SIZE_RATIO: 0.20, 
     COLLISION_TOLERANCE: 0.15, 
     GRAVITY: 0.8,
-    MAX_PARTICLES: 60
+    MAX_PARTICLES: 60,
+    AFFIRMATIONS: ["NICE!", "GOOD!", "SWEET!", "GREAT!", "SUPER!", "HYPER!", "ULTRA!", "CRAZY!", "INSANE!", "EPIC!", "LEGEND!", "GODLIKE!"]
 };
 const state = {
     screen: 'start',
@@ -216,7 +217,8 @@ const state = {
     shake: 0,
     logBumpY: 0, 
     bgOffset: 0,
-    waitingForLevelEnd: false, 
+    waitingForLevelEnd: false,
+    logShape: [] 
 };
 const objects = {
     log: null,
@@ -312,6 +314,23 @@ window.addEventListener('resize', () => {
 });
 resize();
 function normalizeAngle(rad) { return rad - Math.PI * 2 * Math.floor(rad / (Math.PI * 2)); }
+
+function generateLogShape(radius) {
+    const points = 100; 
+    const shape = [];
+    for (let i = 0; i <= points; i++) {
+        const angle = (i / points) * Math.PI * 2;
+        // Very subtle variations: 1-1.5% max
+        // Using high frequency waves for "texture" without distorting circularity
+        const wave1 = Math.sin(angle * 20) * 0.005;
+        const wave2 = Math.cos(angle * 12) * 0.005;
+        const noise = (Math.random() - 0.5) * 0.005;
+        const r = radius * (1 + wave1 + wave2 + noise);
+        shape.push({r, angle});
+    }
+    return shape;
+}
+
 function generateLevel(level) {
     const fruitCount = 1 + Math.min(Math.floor(level / 2), 6);
     state.applesRemaining = fruitCount;
@@ -323,6 +342,11 @@ function generateLevel(level) {
     objects.particles.length = 0;
     state.rotationPattern = [];
     state.waitingForLevelEnd = false;
+    
+    // Generate new jagged shape for this level
+    const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
+    state.logShape = generateLogShape(logRadius);
+
     let baseSpeed = 0.02 + (level * 0.002);
     if (level < 2) {
         state.rotationPattern.push({ speed: baseSpeed, duration: 9999 });
@@ -428,7 +452,7 @@ function checkCollisions() {
     if (!objects.activeKnife) return;
     const knife = objects.activeKnife;
     const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
-    const centerY = state.height * 0.28; 
+    const centerY = state.height * 0.33; 
     const surfaceY = centerY + logRadius;
     const currentTipY = knife.y - (knife.height/2);
     const distToSurface = currentTipY - surfaceY; 
@@ -480,7 +504,9 @@ function checkCollisions() {
         createParticles(state.width/2, surfaceY, 'wood');
         if (state.applesRemaining === 0) {
             playSound('win');
-            spawnFloatingText("STAGE CLEARED!", state.width/2, centerY);
+            // Select Affirmation
+            const affirmIndex = Math.min(state.level - 1, CONSTANTS.AFFIRMATIONS.length - 1);
+            spawnFloatingText(CONSTANTS.AFFIRMATIONS[affirmIndex], state.width/2, centerY);
             startLevelEndAnimation(); 
         }
     } else {
@@ -514,7 +540,7 @@ function startLevelEndAnimation() {
     state.shake = 30;
     vibrate(300);
     const centerX = state.width / 2;
-    const centerY = state.height * 0.28; 
+    const centerY = state.height * 0.33; 
     const radius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
     const pieces = 12; 
     for(let i=0; i<pieces; i++) {
@@ -606,12 +632,14 @@ function drawBackground(ctx) {
     ctx.fillRect(0,0, state.width, state.height);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
     const streakWidth = state.width / 12;
+    const cycle = state.width + streakWidth; 
     for(let i=0; i<15; i++) {
-        const x = (i * streakWidth) + (state.bgOffset % streakWidth);
+        let x = ((i * streakWidth) + state.bgOffset) % cycle;
+        x -= streakWidth;
         let sw = i % 2 === 0 ? streakWidth * 0.4 : streakWidth * 0.8;
-        ctx.fillRect(x - 20, 0, sw, state.height);
+        ctx.fillRect(x, 0, sw, state.height);
     }
-    state.bgOffset += 0.1;
+    state.bgOffset += 0.5;
 }
 function drawLog(ctx, cx, cy, radius) {
     if (state.screen === 'animating_level_end') {
@@ -621,22 +649,85 @@ function drawLog(ctx, cx, cy, radius) {
     ctx.save();
     ctx.translate(cx, cy + state.logBumpY); 
     ctx.rotate(state.logRotation);
+    
+    // Draw Jagged Bark with smooth Bezier curves
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    const points = state.logShape.length || 0;
+    if(points > 0) {
+        // Calculate the first point
+        const r0 = state.logShape[0].r;
+        const a0 = state.logShape[0].angle;
+        const px0 = Math.cos(a0) * r0;
+        const py0 = Math.sin(a0) * r0;
+        ctx.moveTo(px0, py0);
+
+        // Use bezierCurveTo for smooth, irregular curves
+        for(let i=1; i<=points; i++) {
+            const p1 = state.logShape[i % points];
+            const p2 = state.logShape[(i + 1) % points];
+
+            // Calculate control points for smooth curves
+            const r1 = p1.r;
+            const a1 = p1.angle;
+            const px1 = Math.cos(a1) * r1;
+            const py1 = Math.sin(a1) * r1;
+
+            const r2 = p2.r;
+            const a2 = p2.angle;
+            const px2 = Math.cos(a2) * r2;
+            const py2 = Math.sin(a2) * r2;
+
+            const cp1x = px1 - Math.sin(a1) * r1 * 0.2;
+            const cp1y = py1 + Math.cos(a1) * r1 * 0.2;
+            const cp2x = px2 + Math.sin(a2) * r2 * 0.2;
+            const cp2y = py2 - Math.cos(a2) * r2 * 0.2;
+
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, px2, py2);
+        }
+        ctx.closePath();
+    } else {
+        // Fallback
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    }
+    
     ctx.fillStyle = '#6d4c41'; 
     ctx.fill();
     ctx.lineWidth = 4;
     ctx.strokeStyle = '#4e342e';
     ctx.stroke();
+    
+    // Inner rings with a slight irregular wobble
     ctx.beginPath();
-    ctx.arc(0, 0, radius - 5, 0, Math.PI * 2);
+    ctx.moveTo(state.logShape[0].r - 5, 0);
+    for(let i=1; i<=points; i++) {
+        const p = state.logShape[i % points];
+        const r = p.r - 5; // Slightly smaller radius for inner wood
+        const a = p.angle;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
     ctx.fillStyle = '#ffe0b2'; 
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ffcc80'; 
-    for(let i=1; i<=3; i++) {
+
+    // Inner rings drawn with the same irregular path logic
+    for(let j=1; j<=3; j++) {
         ctx.beginPath();
-        ctx.ellipse(0, 0, (radius-10)*(i/3.5), (radius-10)*(i/3.5)*0.95, 0, 0, Math.PI*2);
+        const scale = (j/3.5);
+        ctx.moveTo((state.logShape[0].r - 10) * scale, 0);
+        for(let i=1; i<=points; i++) {
+            const p = state.logShape[i % points];
+            const r = (p.r - 10) * scale; 
+            const a = p.angle;
+            const px = Math.cos(a) * r;
+            const py = Math.sin(a) * r;
+            ctx.lineTo(px, py);
+        }
+        ctx.closePath();
         ctx.stroke();
     }
     ctx.fillStyle = '#ffcc80';
@@ -752,7 +843,7 @@ function drawActiveKnife(ctx) {
     ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
     ctx.fillStyle = '#ffca28';
     ctx.fillRect(-w/2, h/6, w, 4);
-    if (k.y < state.height * 0.28 + 100) { 
+    if (k.y < state.height * 0.33 + 100) { 
         ctx.beginPath();
         ctx.arc(0, -h/2, 4, 0, Math.PI*2);
         ctx.fillStyle = '#fff';
@@ -824,7 +915,8 @@ function drawFloatingText(ctx) {
         ctx.fillStyle = '#ffca28';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.font = 'bold 3rem "Fredoka One"';
+        // Responsive font size: min(3rem, 12vw)
+        ctx.font = 'bold min(3rem, 12vw) "Fredoka One"';
         ctx.textAlign = 'center';
         ctx.strokeText(ft.text, ft.x, ft.y);
         ctx.fillText(ft.text, ft.x, ft.y);
@@ -872,7 +964,7 @@ function loop() {
             checkCollisions();
         }
         const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
-        const logY = state.height * 0.28; 
+        const logY = state.height * 0.33; 
         drawLog(ctx, state.width/2, logY, logRadius);
         drawActiveKnife(ctx);
         drawReadyKnife(ctx); 
