@@ -273,9 +273,9 @@
 </div>
 <script>
 const CONSTANTS = {
-    LOG_RADIUS_RATIO: 0.40,
+    LOG_RADIUS_RATIO: 0.30,
     KNIFE_SPEED_RATIO: 0.18, 
-    KNIFE_SIZE_RATIO: 0.20, 
+    KNIFE_SIZE_RATIO: 0.10, 
     COLLISION_TOLERANCE: 0.15, 
     GRAVITY: 0.8,
     MAX_PARTICLES: 60,
@@ -910,12 +910,6 @@ function drawActiveKnife(ctx) {
     ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
     ctx.fillStyle = '#ffca28';
     ctx.fillRect(-w/2, h/6, w, 4);
-    if (k.y < state.height * 0.33 + 100) { 
-        ctx.beginPath();
-        ctx.arc(0, -h/2, 4, 0, Math.PI*2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-    }
     ctx.restore();
 }
 function drawReadyKnife(ctx) {
