@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Knife Master</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+        :root {
+            --bg-dark: #07191e;
+            --bg-teal: #123640;
+            --accent-orange: #ff9f1a;
+            --accent-red: #e74c3c;
+            --accent-yellow: #f1c40f;
+            --ui-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+        }
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            overflow: hidden;
+            touch-action: none;
+            font-family: 'Fredoka One', cursive;
+            user-select: none;
+            -webkit-user-select: none;
+            width: 100vw;
+            height: 100dvh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+        }
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: max(20px, env(safe-area-inset-top)) 20px 0 20px;
+            width: 100%;
+            pointer-events: none;
+        }
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+        }
+        .score-val {
+            font-size: 4rem;
+            color: #fff;
+            text-shadow: var(--ui-shadow);
+            line-height: 1;
+        }
+        .right-controls {
+            pointer-events: auto;
+        }
+        #quit-btn {
+            background: rgba(0,0,0,0.4);
+            border: 2px solid #546e7a;
+            color: #bdc3c7;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Fredoka One', cursive;
+            transition: transform 0.1s, background 0.1s;
+            text-transform: uppercase;
+        }
+        #quit-btn:active {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+            color: white;
+            transform: scale(0.95);
+        }
+        #game-over-screen, #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 23, 29, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            pointer-events: auto;
+            opacity: 0;
+            transition: opacity 0.3s;
+            visibility: hidden;
+            padding-bottom: 50px;
+        }
+        #game-over-screen.visible, #start-screen.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        h1 {
+            font-size: 15vw;
+            max-font-size: 5rem;
+            margin: 0 0 20px 0;
+            text-align: center;
+            line-height: 0.85;
+            color: #fff;
+        }
+        @media (min-width: 600px) {
+            h1 { font-size: 5rem; }
+        }
+        #start-screen h1 span {
+            color: var(--accent-orange);
+        }
+        .go-title {
+            color: #fff;
+        }
+        .go-title span {
+            color: var(--accent-red) !important;
+        }
+        .go-score-box {
+            font-size: 2.2rem;
+            color: #fff;
+            margin-top: 10px;
+            margin-bottom: 30px;
+        }
+        .go-score-box span {
+            color: var(--accent-yellow);
+        }
+        button.main-btn {
+            background: transparent;
+            border: 4px solid var(--accent-orange);
+            padding: 12px 60px;
+            font-size: 2.5rem;
+            color: var(--accent-orange);
+            border-radius: 16px;
+            font-family: 'Fredoka One', cursive;
+            cursor: pointer;
+            transition: transform 0.1s;
+            margin-top: 10px; 
+            touch-action: manipulation;
+        }
+        button.main-btn:active {
+            background: var(--accent-orange);
+            color: var(--bg-dark);
+            transform: scale(0.95);
+        }
+        .hidden { display: none !important; }
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            overflow: hidden;
+            background: var(--bg-dark);
+        }
+    </style>
+</head>
+<body>
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="stats-container">
+                <div class="score-val" id="score-val">0</div>
+            </div>
+            <div class="right-controls">
+                <button id="quit-btn">QUIT</button>
+            </div>
+        </div>
+    </div>
+    <div id="start-screen" class="visible">
+        <h1>KNIFE<br><span>HIT</span></h1>
+        <button id="start-btn" class="main-btn">PLAY</button>
+    </div>
+    <div id="game-over-screen">
+        <h1 class="go-title">GAME<br><span>OVER</span></h1>
+        <div class="go-score-box">Score: <span id="final-score">0</span></div>
+        <button id="restart-btn" class="main-btn">RETRY</button>
+    </div>
+</div>
+<script>
+const CONSTANTS = {
+    LOG_RADIUS_RATIO: 0.17, 
+    KNIFE_SPEED_RATIO: 0.18, 
+    KNIFE_SIZE_RATIO: 0.20, 
+    COLLISION_TOLERANCE: 0.15, 
+    GRAVITY: 0.8,
+    MAX_PARTICLES: 60
+};
+const state = {
+    screen: 'start',
+    width: 0,
+    height: 0,
+    score: 0,
+    level: 1,
+    applesRemaining: 0,
+    logRotation: 0,
+    rotationSpeed: 0.03,
+    rotationPattern: [],
+    patternIndex: 0,
+    patternTimer: 0,
+    shake: 0,
+    logBumpY: 0, 
+    bgOffset: 0,
+    waitingForLevelEnd: false, 
+};
+const objects = {
+    log: null,
+    activeKnife: null,
+    stuckKnives: [], 
+    fruits: [], 
+    particles: [],
+    fruitSlices: [], 
+    logShards: [],
+    floatingTexts: [] 
+};
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', { 
+    alpha: false,
+    desynchronized: true
+});
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playSound(type) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if (type === 'throw') {
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1); 
+        gainNode.gain.setValueAtTime(0.2, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    } else if (type === 'wood') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+        gainNode.gain.setValueAtTime(0.6, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    } else if (type === 'fruit') {
+        osc.type = 'triangle'; 
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(200, now + 0.15);
+        gainNode.gain.setValueAtTime(0.4, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+    } else if (type === 'metal') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(2000, now); 
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.3);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'break') {
+        osc.type = 'lowpass'; 
+        osc.frequency.setValueAtTime(100, now);
+        gainNode.gain.setValueAtTime(0.8, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+    } else if (type === 'win') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+        gainNode.gain.setValueAtTime(0.5, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+    }
+}
+function vibrate(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms);
+}
+function resize() {
+    state.width = window.innerWidth;
+    state.height = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = state.width * dpr;
+    canvas.height = state.height * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', () => {
+    clearTimeout(window.resizeTimeout);
+    window.resizeTimeout = setTimeout(resize, 100);
+});
+resize();
+function normalizeAngle(rad) { return rad - Math.PI * 2 * Math.floor(rad / (Math.PI * 2)); }
+function generateLevel(level) {
+    const fruitCount = 1 + Math.min(Math.floor(level / 2), 6);
+    state.applesRemaining = fruitCount;
+    objects.stuckKnives.length = 0;
+    objects.fruits.length = 0;
+    objects.logShards.length = 0;
+    objects.fruitSlices.length = 0;
+    objects.floatingTexts.length = 0;
+    objects.particles.length = 0;
+    state.rotationPattern = [];
+    state.waitingForLevelEnd = false;
+    let baseSpeed = 0.02 + (level * 0.002);
+    if (level < 2) {
+        state.rotationPattern.push({ speed: baseSpeed, duration: 9999 });
+    } else {
+        const phases = 3 + (level % 3);
+        for(let i=0; i<phases; i++) {
+            let speed = (Math.random() > 0.4 ? 1 : -1) * (baseSpeed + (Math.random() * 0.04));
+            if (level > 4 && Math.random() < 0.15) {
+                speed = 0;
+                state.rotationPattern.push({
+                    speed: 0,
+                    duration: 20 + Math.floor(Math.random() * 20) 
+                });
+            } else {
+                state.rotationPattern.push({
+                    speed: speed,
+                    duration: 60 + Math.floor(Math.random() * 100)
+                });
+            }
+        }
+    }
+    state.patternIndex = 0;
+    state.patternTimer = 0;
+    state.rotationSpeed = state.rotationPattern[0].speed;
+    const minFruitDist = 0.65; 
+    for(let i=0; i<fruitCount; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let tries = 0;
+        let safe = false;
+        while(tries < 50 && !safe) {
+            safe = true;
+            for(let f of objects.fruits) {
+                let diff = Math.abs(normalizeAngle(angle - f.angle));
+                if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                if(diff < minFruitDist) safe = false;
+            }
+            if (!safe) {
+                angle = Math.random() * Math.PI * 2;
+                tries++;
+            }
+        }
+        if(safe) objects.fruits.push({ angle: angle, hit: false });
+    }
+    if (level >= 3) {
+        const count = Math.min(Math.floor(level / 3), 3);
+        for(let i=0; i<count; i++) {
+            let angle = Math.random() * Math.PI * 2;
+             let safe = true;
+             for(let f of objects.fruits) {
+                let diff = Math.abs(normalizeAngle(angle - f.angle));
+                if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                if(diff < 0.5) safe = false;
+             }
+             if(safe) objects.stuckKnives.push({
+                 angle: angle, 
+                 wobblePhase: 0, 
+                 wobbleAmp: 0,
+                 flash: 0
+            });
+        }
+    }
+}
+function updateLogRotation() {
+    if (state.screen === 'animating_level_end') return;
+    state.logBumpY *= 0.8;
+    let targetSpeed = state.rotationPattern[state.patternIndex].speed;
+    if (state.waitingForLevelEnd) {
+        targetSpeed = 0.005; 
+    }
+    state.rotationSpeed += (targetSpeed - state.rotationSpeed) * 0.1;
+    state.logRotation += state.rotationSpeed;
+    state.logRotation = normalizeAngle(state.logRotation);
+    if (!state.waitingForLevelEnd) {
+        state.patternTimer++;
+        if (state.patternTimer > state.rotationPattern[state.patternIndex].duration) {
+            state.patternTimer = 0;
+            state.patternIndex = (state.patternIndex + 1) % state.rotationPattern.length;
+        }
+    }
+    objects.stuckKnives.forEach(k => {
+        if (k.wobbleAmp > 0.001) {
+            k.wobblePhase += 0.8;
+            k.wobbleAmp *= 0.92;
+        } else {
+            k.wobbleAmp = 0;
+        }
+        if (k.flash > 0) k.flash--;
+    });
+}
+function throwKnife() {
+    if (objects.activeKnife || state.screen !== 'playing') return;
+    playSound('throw');
+    objects.activeKnife = {
+        x: state.width / 2,
+        y: state.height + 20, 
+        width: 30,
+        height: state.height * CONSTANTS.KNIFE_SIZE_RATIO,
+        speed: state.height * CONSTANTS.KNIFE_SPEED_RATIO
+    };
+    objects.activeKnife.y = state.height - 40; 
+}
+function checkCollisions() {
+    if (!objects.activeKnife) return;
+    const knife = objects.activeKnife;
+    const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
+    const centerY = state.height * 0.28; 
+    const surfaceY = centerY + logRadius;
+    const currentTipY = knife.y - (knife.height/2);
+    const distToSurface = currentTipY - surfaceY; 
+    if (distToSurface <= knife.speed) {
+        let timeFraction = 0;
+        if (knife.speed > 0) timeFraction = Math.max(0, distToSurface) / knife.speed;
+        const impactRotation = state.logRotation + (state.rotationSpeed * timeFraction);
+        const hitAngle = normalizeAngle(-impactRotation);
+        for (let k of objects.stuckKnives) {
+            let diff = Math.abs(normalizeAngle(k.angle) - hitAngle);
+            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+            if (diff < CONSTANTS.COLLISION_TOLERANCE) {
+                knife.y -= distToSurface; 
+                knife.speed = -20; 
+                knife.r = (Math.random() - 0.5) * 0.5; 
+                playSound('metal');
+                state.shake = 25;
+                vibrate(200);
+                setTimeout(gameOver, 300);
+                return; 
+            }
+        }
+        objects.fruits.forEach(fruit => {
+            if (fruit.hit) return;
+            let diff = Math.abs(normalizeAngle(fruit.angle) - hitAngle);
+            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+            if (diff < CONSTANTS.COLLISION_TOLERANCE * 1.5) {
+                fruit.hit = true;
+                state.applesRemaining--;
+                state.score += 10;
+                playSound('fruit');
+                vibrate(50);
+                spawnFruitSlices(state.width/2, surfaceY);
+                createParticles(state.width/2, surfaceY, 'fruit');
+            }
+        });
+        playSound('wood');
+        vibrate(30);
+        objects.stuckKnives.push({
+            angle: hitAngle,
+            wobblePhase: 0,
+            wobbleAmp: 0.2,
+            flash: 5 
+        });
+        objects.activeKnife = null;
+        state.score++;
+        state.shake = 6;
+        state.logBumpY = -12; 
+        createParticles(state.width/2, surfaceY, 'wood');
+        if (state.applesRemaining === 0) {
+            playSound('win');
+            spawnFloatingText("STAGE CLEARED!", state.width/2, centerY);
+            startLevelEndAnimation(); 
+        }
+    } else {
+        knife.y -= knife.speed;
+    }
+}
+function spawnFruitSlices(x, y) {
+    objects.fruitSlices.push({
+        x: x - 10, y: y,
+        vx: -5 - Math.random()*8,
+        vy: -5 - Math.random()*8,
+        rot: 0, rotSpeed: -0.3,
+        side: 'left'
+    });
+    objects.fruitSlices.push({
+        x: x + 10, y: y,
+        vx: 5 + Math.random()*8,
+        vy: -5 - Math.random()*8,
+        rot: 0, rotSpeed: 0.3,
+        side: 'right'
+    });
+}
+function spawnFloatingText(text, x, y) {
+    objects.floatingTexts.push({
+        text: text, x: x, y: y, life: 60, vy: -2
+    });
+}
+function startLevelEndAnimation() {
+    state.screen = 'animating_level_end';
+    playSound('break');
+    state.shake = 30;
+    vibrate(300);
+    const centerX = state.width / 2;
+    const centerY = state.height * 0.28; 
+    const radius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
+    const pieces = 12; 
+    for(let i=0; i<pieces; i++) {
+        let angleStart = (i / pieces) * Math.PI * 2;
+        let angleEnd = ((i + 1) / pieces) * Math.PI * 2;
+        objects.logShards.push({
+            x: centerX,
+            y: centerY,
+            vx: Math.cos((angleStart+angleEnd)/2) * (Math.random() * 10 + 5),
+            vy: Math.sin((angleStart+angleEnd)/2) * (Math.random() * 10 + 5),
+            rot: state.logRotation,
+            rotSpeed: (Math.random() - 0.5) * 0.5,
+            angleStart: angleStart,
+            angleEnd: angleEnd,
+            radius: radius
+        });
+    }
+    setTimeout(nextLevel, 1200);
+}
+function gameOver() {
+    if (state.screen === 'gameover') return;
+    state.screen = 'gameover';
+    document.getElementById('final-score').innerText = state.score;
+    document.getElementById('game-over-screen').classList.add('visible');
+    document.getElementById('ui-layer').classList.add('hidden');
+}
+function quitGame() {
+    state.screen = 'start';
+    objects.activeKnife = null;
+    document.getElementById('game-over-screen').classList.remove('visible');
+    document.getElementById('start-screen').classList.add('visible');
+    document.getElementById('ui-layer').classList.remove('hidden');
+    document.getElementById('ui-layer').style.opacity = '0';
+}
+function nextLevel() {
+    state.level++;
+    state.screen = 'playing';
+    generateLevel(state.level);
+    updateUI();
+}
+function startGame() {
+    initAudio();
+    state.score = 0;
+    state.level = 1;
+    state.screen = 'playing';
+    objects.activeKnife = null;
+    generateLevel(1);
+    updateUI();
+    document.getElementById('start-screen').classList.remove('visible');
+    document.getElementById('game-over-screen').classList.remove('visible');
+    document.getElementById('ui-layer').classList.remove('hidden');
+    document.getElementById('ui-layer').style.opacity = '1';
+}
+function updateUI() {
+    document.getElementById('score-val').innerText = state.score;
+}
+function createParticles(x, y, type) {
+    const count = type === 'wood' ? 8 : 15;
+    if (objects.particles.length > CONSTANTS.MAX_PARTICLES) {
+        objects.particles.splice(0, count);
+    }
+    for(let i=0; i<count; i++) {
+        let pType = 'wood';
+        let color = ['#795548', '#a1887f', '#5d4037'][Math.floor(Math.random()*3)];
+        if (type === 'fruit') {
+            pType = Math.random() > 0.6 ? 'skin' : 'juice';
+            color = Math.random() > 0.5 ? '#e74c3c' : '#c0392b';
+        }
+        objects.particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 15,
+            vy: (Math.random() - 0.5) * 15,
+            life: 30 + Math.random() * 20,
+            color: color,
+            size: Math.random() * 4 + 2,
+            rot: Math.random() * 6,
+            type: pType
+        });
+    }
+}
+function drawBackground(ctx) {
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    let grd = ctx.createRadialGradient(state.width/2, state.height/2, 50, state.width/2, state.height/2, state.height);
+    grd.addColorStop(0, '#123640'); 
+    grd.addColorStop(1, '#07191e'); 
+    ctx.fillStyle = grd;
+    ctx.fillRect(0,0, state.width, state.height);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    const streakWidth = state.width / 12;
+    for(let i=0; i<15; i++) {
+        const x = (i * streakWidth) + (state.bgOffset % streakWidth);
+        let sw = i % 2 === 0 ? streakWidth * 0.4 : streakWidth * 0.8;
+        ctx.fillRect(x - 20, 0, sw, state.height);
+    }
+    state.bgOffset += 0.1;
+}
+function drawLog(ctx, cx, cy, radius) {
+    if (state.screen === 'animating_level_end') {
+        drawShards(ctx);
+        return;
+    }
+    ctx.save();
+    ctx.translate(cx, cy + state.logBumpY); 
+    ctx.rotate(state.logRotation);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#6d4c41'; 
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#4e342e';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffe0b2'; 
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffcc80'; 
+    for(let i=1; i<=3; i++) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, (radius-10)*(i/3.5), (radius-10)*(i/3.5)*0.95, 0, 0, Math.PI*2);
+        ctx.stroke();
+    }
+    ctx.fillStyle = '#ffcc80';
+    ctx.beginPath();
+    ctx.arc(0,0, 10, 0, Math.PI*2);
+    ctx.fill();
+    objects.stuckKnives.forEach(k => {
+        ctx.save();
+        ctx.rotate(k.angle);
+        ctx.translate(0, radius); 
+        const wobble = Math.sin(k.wobblePhase) * k.wobbleAmp;
+        ctx.rotate(wobble); 
+        ctx.translate(0, -radius);
+        drawKnifeInLog(ctx, radius, k.flash);
+        ctx.restore();
+    });
+    objects.fruits.forEach(fruit => {
+        if (fruit.hit) return;
+        ctx.save();
+        ctx.rotate(fruit.angle);
+        drawFruit(ctx, radius);
+        ctx.restore();
+    });
+    ctx.restore();
+}
+function drawKnifeInLog(ctx, radius, flash) {
+    const w = 18; 
+    const h = 55; 
+    ctx.translate(0, radius - 2); 
+    if (flash > 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-w/2 - 1, -1, w + 2, h + 2);
+    } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(-w/2 + 3, 3, w, h);
+        ctx.fillStyle = '#5d4037'; 
+        ctx.fillRect(-w/2, 0, w, h);
+        ctx.fillStyle = '#3e2723';
+        ctx.fillRect(-w/2, 8, w, 2);
+        ctx.fillRect(-w/2, 18, w, 2);
+        ctx.fillRect(-w/2, 28, w, 2);
+        ctx.fillStyle = '#ffca28';
+        ctx.fillRect(-w/2 - 1, 0, w + 2, 6);
+    }
+}
+function drawFruit(ctx, radius) {
+    ctx.translate(0, radius); 
+    ctx.beginPath();
+    ctx.arc(0, 16, 16, 0, Math.PI*2); 
+    ctx.fillStyle = '#e53935';
+    ctx.fill();
+    ctx.strokeStyle = '#b71c1c';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-3, 6, 4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(4, 28, 8, 4, Math.PI/2, 0, Math.PI*2);
+    ctx.fillStyle = '#43a047';
+    ctx.fill();
+}
+function drawFruitSlices(ctx) {
+    objects.fruitSlices.forEach(s => {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += CONSTANTS.GRAVITY;
+        s.rot += s.rotSpeed;
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.rot);
+        ctx.beginPath();
+        if (s.side === 'left') ctx.arc(0, 0, 16, Math.PI/2, 3*Math.PI/2);
+        else ctx.arc(0, 0, 16, -Math.PI/2, Math.PI/2);
+        ctx.closePath();
+        ctx.fillStyle = '#e53935';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(0, 12);
+        ctx.strokeStyle = '#ffecb3';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    });
+}
+function drawActiveKnife(ctx) {
+    if (!objects.activeKnife) return;
+    const k = objects.activeKnife;
+    ctx.save();
+    ctx.translate(k.x, k.y);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-8, 10, 16, 50); 
+    ctx.globalAlpha = 1.0;
+    const w = 22;
+    const h = k.height;
+    ctx.beginPath();
+    ctx.moveTo(0, -h/2); 
+    ctx.lineTo(w/2, -h/6);
+    ctx.lineTo(w/2, h/6);
+    ctx.lineTo(-w/2, h/6);
+    ctx.lineTo(-w/2, -h/6);
+    ctx.closePath();
+    let grd = ctx.createLinearGradient(-w, 0, w, 0);
+    grd.addColorStop(0, '#cfd8dc');
+    grd.addColorStop(0.5, '#ffffff');
+    grd.addColorStop(1, '#90a4ae');
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.fillStyle = '#795548';
+    ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
+    ctx.fillStyle = '#ffca28';
+    ctx.fillRect(-w/2, h/6, w, 4);
+    if (k.y < state.height * 0.28 + 100) { 
+        ctx.beginPath();
+        ctx.arc(0, -h/2, 4, 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+    }
+    ctx.restore();
+}
+function drawReadyKnife(ctx) {
+    if (objects.activeKnife || state.screen !== 'playing') return;
+    const cx = state.width / 2;
+    const cy = state.height - 40; 
+    const h = state.height * CONSTANTS.KNIFE_SIZE_RATIO;
+    const w = 22;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.moveTo(0, -h/2); 
+    ctx.lineTo(w/2, -h/6);
+    ctx.lineTo(w/2, h/6);
+    ctx.lineTo(-w/2, h/6);
+    ctx.lineTo(-w/2, -h/6);
+    ctx.closePath();
+    let grd = ctx.createLinearGradient(-w, 0, w, 0);
+    grd.addColorStop(0, '#cfd8dc');
+    grd.addColorStop(0.5, '#ffffff');
+    grd.addColorStop(1, '#90a4ae');
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.fillStyle = '#795548';
+    ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
+    ctx.fillStyle = '#ffca28';
+    ctx.fillRect(-w/2, h/6, w, 4);
+    ctx.restore();
+}
+function drawParticles(ctx) {
+    for (let i = objects.particles.length - 1; i >= 0; i--) {
+        let p = objects.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += CONSTANTS.GRAVITY;
+        p.life--;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, p.life / 30);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        if (p.type === 'juice') {
+            ctx.arc(0,0, p.size, 0, Math.PI*2);
+        } else if (p.type === 'skin') {
+            ctx.rect(-p.size, -p.size, p.size*2, p.size*2);
+        } else {
+            ctx.moveTo(-p.size, -p.size);
+            ctx.lineTo(p.size, 0);
+            ctx.lineTo(0, p.size);
+        }
+        ctx.fill();
+        ctx.restore();
+        if (p.life <= 0) objects.particles.splice(i, 1);
+    }
+}
+function drawFloatingText(ctx) {
+    for (let i = objects.floatingTexts.length - 1; i >= 0; i--) {
+        let ft = objects.floatingTexts[i];
+        ft.y += ft.vy;
+        ft.life--;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, ft.life / 30);
+        ctx.fillStyle = '#ffca28';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.font = 'bold 3rem "Fredoka One"';
+        ctx.textAlign = 'center';
+        ctx.strokeText(ft.text, ft.x, ft.y);
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+        if (ft.life <= 0) objects.floatingTexts.splice(i, 1);
+    }
+}
+function drawShards(ctx) {
+    objects.logShards.forEach(shard => {
+        shard.x += shard.vx;
+        shard.y += shard.vy;
+        shard.vy += 0.5;
+        shard.rot += shard.rotSpeed;
+        ctx.save();
+        ctx.translate(shard.x, shard.y);
+        ctx.rotate(shard.rot);
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.arc(0,0, shard.radius, shard.angleStart, shard.angleEnd);
+        ctx.closePath();
+        ctx.fillStyle = '#ffe0b2';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#6d4c41';
+        ctx.stroke();
+        ctx.restore();
+    });
+}
+function loop() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.scale(dpr, dpr);
+    drawBackground(ctx);
+    if (state.shake > 0) {
+        const dx = (Math.random() - 0.5) * state.shake;
+        const dy = (Math.random() - 0.5) * state.shake;
+        ctx.translate(dx, dy);
+        state.shake *= 0.85; 
+        if (state.shake < 0.5) state.shake = 0;
+    }
+    if (state.screen === 'playing' || state.screen === 'gameover' || state.screen === 'animating_level_end') {
+        if (state.screen === 'playing') {
+            updateLogRotation();
+            checkCollisions();
+        }
+        const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
+        const logY = state.height * 0.28; 
+        drawLog(ctx, state.width/2, logY, logRadius);
+        drawActiveKnife(ctx);
+        drawReadyKnife(ctx); 
+        drawFruitSlices(ctx); 
+        drawParticles(ctx);
+        drawFloatingText(ctx);
+    }
+    requestAnimationFrame(loop);
+}
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+document.getElementById('quit-btn').addEventListener('click', quitGame);
+window.addEventListener('pointerdown', (e) => {
+    if (e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        if (state.screen === 'playing') {
+            throwKnife();
+        }
+    }
+}, { passive: false });
+loop();
+</script>
+</body>
+</html>
