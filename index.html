@@ -71,8 +71,11 @@
         }
         .right-controls {
             pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px; 
         }
-        #quit-btn {
+        #quit-btn, #mute-btn {
             background: rgba(0,0,0,0.4);
             border: 2px solid #546e7a;
             color: #bdc3c7;
@@ -86,12 +89,12 @@
             transition: transform 0.1s, background 0.1s, color 0.1s;
             padding: 0;
         }
-        #quit-btn svg {
+        #quit-btn svg, #mute-btn svg {
             width: 30px;
             height: 30px;
             fill: currentColor;
         }
-        #quit-btn:active {
+        #quit-btn:active, #mute-btn:active {
             background: var(--accent-red);
             border-color: var(--accent-red);
             color: white;
@@ -143,10 +146,15 @@
             font-size: 2.2rem;
             color: #fff;
             margin-top: 10px;
-            margin-bottom: 30px;
+            margin-bottom: 5px;
         }
         .go-score-box span {
             color: var(--accent-yellow);
+        }
+        .small-score {
+            font-size: 1.5rem;
+            color: #bdc3c7;
+            margin-bottom: 30px;
         }
         button.main-btn {
             background: transparent;
@@ -249,6 +257,13 @@
                         <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
                     </svg>
                 </button>
+                <button id="mute-btn" aria-label="Mute Sound">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11 5L6 9H2V15H6L11 19V5Z" />
+                        <line x1="20" y1="9" x2="14" y2="15" stroke="currentColor" stroke-width="2" />
+                        <line x1="14" y1="9" x2="20" y2="15" stroke="currentColor" stroke-width="2" />
+                    </svg>
+                </button>
             </div>
         </div>
     </div>
@@ -267,15 +282,16 @@
     </div>
     <div id="game-over-screen">
         <h1 class="go-title">GAME<br><span>OVER</span></h1>
-        <div class="go-score-box">Score: <span id="final-score">0</span></div>
+        <div class="go-score-box">Your Score: <span id="final-score">0</span></div>
+        <div class="go-score-box small-score">High Score: <span id="high-score">0</span></div>
         <button id="restart-btn" class="main-btn">RETRY</button>
     </div>
 </div>
 <script>
 const CONSTANTS = {
-    LOG_RADIUS_RATIO: 0.30,
+    LOG_RADIUS_RATIO: 0.40,
     KNIFE_SPEED_RATIO: 0.18, 
-    KNIFE_SIZE_RATIO: 0.10, 
+    KNIFE_SIZE_RATIO: 0.20, 
     COLLISION_TOLERANCE: 0.15, 
     GRAVITY: 0.8,
     MAX_PARTICLES: 60,
@@ -284,7 +300,15 @@ const CONSTANTS = {
         "GREAT!", "SUPER!", "HYPER!", "ULTRA!", "CRAZY!", 
         "WILD!", "SICK!", "RAD!", "INSANE!", "EPIC!", 
         "SAVAGE!", "BRUTAL!", "MASTER!", "LEGEND!", "GODLIKE!"
-    ]
+    ],
+    MIN_OBJECT_SPACING: 0.45,
+    CAP_LEVEL: 30,
+    MIN_SPEED: 0.03,
+    MAX_SPEED: 0.12,
+    MIN_OBSTACLES: 0,
+    MAX_OBSTACLES: 7,
+    MIN_FRUITS: 3,
+    MAX_FRUITS: 7
 };
 const state = {
     screen: 'start',
@@ -295,14 +319,12 @@ const state = {
     applesRemaining: 0,
     logRotation: 0,
     rotationSpeed: 0.03,
-    rotationPattern: [],
-    patternIndex: 0,
-    patternTimer: 0,
     shake: 0,
     logBumpY: 0, 
     bgOffset: 0,
     waitingForLevelEnd: false,
-    logShape: [] 
+    logShape: [],
+    muted: true
 };
 const objects = {
     log: null,
@@ -326,6 +348,7 @@ function initAudio() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 function playSound(type) {
+    if (state.muted) return;
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
@@ -380,8 +403,18 @@ function playSound(type) {
         osc.stop(now + 0.5);
     }
 }
-function vibrate(ms) {
-    if (navigator.vibrate) navigator.vibrate(ms);
+function toggleMute() {
+    state.muted = !state.muted;
+    const btn = document.getElementById('mute-btn');
+    if (state.muted) {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11 5L6 9H2V15H6L11 19V5Z" /><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2" /><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2" /></svg>';
+        btn.style.borderColor = '#e74c3c';
+        btn.style.color = '#e74c3c';
+    } else {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11 5L6 9H2V15H6L11 19V5Z" /><path d="M15.54 8.46C16.47 9.39 17 10.63 17 12C17 13.37 16.47 14.61 15.54 15.54" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.07 4.93C20.94 6.8 22 9.28 22 12C22 14.72 20.94 17.2 19.07 19.07" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+        btn.style.borderColor = '#546e7a';
+        btn.style.color = '#bdc3c7';
+    }
 }
 function resize() {
     state.width = window.innerWidth;
@@ -412,97 +445,80 @@ function generateLogShape(radius) {
     return shape;
 }
 function generateLevel(level) {
-    const fruitCount = 1 + Math.min(Math.floor(level / 2), 6);
-    state.applesRemaining = fruitCount;
     objects.stuckKnives.length = 0;
     objects.fruits.length = 0;
     objects.logShards.length = 0;
     objects.fruitSlices.length = 0;
     objects.floatingTexts.length = 0;
     objects.particles.length = 0;
-    state.rotationPattern = [];
     state.waitingForLevelEnd = false;
     const logRadius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
     state.logShape = generateLogShape(logRadius);
-    let baseSpeed = 0.02 + (level * 0.002);
-    if (level < 2) {
-        state.rotationPattern.push({ speed: baseSpeed, duration: 9999 });
-    } else {
-        const phases = 3 + (level % 3);
-        for(let i=0; i<phases; i++) {
-            let speed = (Math.random() > 0.4 ? 1 : -1) * (baseSpeed + (Math.random() * 0.04));
-            if (level > 4 && Math.random() < 0.15) {
-                speed = 0;
-                state.rotationPattern.push({
-                    speed: 0,
-                    duration: 20 + Math.floor(Math.random() * 20) 
-                });
-            } else {
-                state.rotationPattern.push({
-                    speed: speed,
-                    duration: 60 + Math.floor(Math.random() * 100)
-                });
-            }
-        }
+    const getLinearVal = (lvl, minVal, maxVal) => {
+        if (lvl <= 1) return minVal;
+        if (lvl >= CONSTANTS.CAP_LEVEL) return maxVal;
+        const progress = (lvl - 1) / (CONSTANTS.CAP_LEVEL - 1);
+        return minVal + (progress * (maxVal - minVal));
+    };
+    state.rotationSpeed = getLinearVal(level, CONSTANTS.MIN_SPEED, CONSTANTS.MAX_SPEED);
+    let numObstacles = Math.floor(getLinearVal(level, CONSTANTS.MIN_OBSTACLES, CONSTANTS.MAX_OBSTACLES));
+    let idealFruits = Math.floor(getLinearVal(level, CONSTANTS.MIN_FRUITS, CONSTANTS.MAX_FRUITS));
+    const maxCapacity = 13; 
+    if (numObstacles + idealFruits > maxCapacity) {
+        numObstacles = Math.max(0, maxCapacity - idealFruits);
     }
-    state.patternIndex = 0;
-    state.patternTimer = 0;
-    state.rotationSpeed = state.rotationPattern[0].speed;
-    const minFruitDist = 0.65; 
-    for(let i=0; i<fruitCount; i++) {
-        let angle = Math.random() * Math.PI * 2;
-        let tries = 0;
-        let safe = false;
-        while(tries < 50 && !safe) {
-            safe = true;
-            for(let f of objects.fruits) {
-                let diff = Math.abs(normalizeAngle(angle - f.angle));
-                if (diff > Math.PI) diff = 2 * Math.PI - diff;
-                if(diff < minFruitDist) safe = false;
-            }
-            if (!safe) {
-                angle = Math.random() * Math.PI * 2;
-                tries++;
-            }
+    state.applesRemaining = idealFruits;
+    const placedAngles = [];
+    const isSafe = (angle) => {
+        for (let a of placedAngles) {
+            let diff = Math.abs(normalizeAngle(angle - a));
+            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+            if (diff < CONSTANTS.MIN_OBJECT_SPACING) return false;
         }
-        if(safe) objects.fruits.push({ angle: angle, hit: false });
-    }
-    if (level >= 3) {
-        const count = Math.min(Math.floor(level / 3), 3);
-        for(let i=0; i<count; i++) {
+        return true;
+    };
+    for (let i = 0; i < numObstacles; i++) {
+        let attempts = 0;
+        let placed = false;
+        while (attempts < 100) {
             let angle = Math.random() * Math.PI * 2;
-             let safe = true;
-             for(let f of objects.fruits) {
-                let diff = Math.abs(normalizeAngle(angle - f.angle));
-                if (diff > Math.PI) diff = 2 * Math.PI - diff;
-                if(diff < 0.5) safe = false;
-             }
-             if(safe) objects.stuckKnives.push({
-                 angle: angle, 
-                 wobblePhase: 0, 
-                 wobbleAmp: 0,
-                 flash: 0
-            });
+            if (isSafe(angle)) {
+                placedAngles.push(angle);
+                objects.stuckKnives.push({
+                    angle: angle,
+                    wobblePhase: 0,
+                    wobbleAmp: 0,
+                    flash: 0
+                });
+                placed = true;
+                break;
+            }
+            attempts++;
+        }
+    }
+    for (let i = 0; i < idealFruits; i++) {
+        let attempts = 0;
+        let placed = false;
+        while (attempts < 200) {
+            let angle = Math.random() * Math.PI * 2;
+            if (isSafe(angle)) {
+                placedAngles.push(angle);
+                objects.fruits.push({ angle: angle, hit: false });
+                placed = true;
+                break;
+            }
+            attempts++;
+        }
+        if (!placed) {
+            state.applesRemaining--; 
         }
     }
 }
 function updateLogRotation() {
     if (state.screen === 'animating_level_end') return;
     state.logBumpY *= 0.8;
-    let targetSpeed = state.rotationPattern[state.patternIndex].speed;
-    if (state.waitingForLevelEnd) {
-        targetSpeed = 0.005; 
-    }
-    state.rotationSpeed += (targetSpeed - state.rotationSpeed) * 0.1;
     state.logRotation += state.rotationSpeed;
     state.logRotation = normalizeAngle(state.logRotation);
-    if (!state.waitingForLevelEnd) {
-        state.patternTimer++;
-        if (state.patternTimer > state.rotationPattern[state.patternIndex].duration) {
-            state.patternTimer = 0;
-            state.patternIndex = (state.patternIndex + 1) % state.rotationPattern.length;
-        }
-    }
     objects.stuckKnives.forEach(k => {
         if (k.wobbleAmp > 0.001) {
             k.wobblePhase += 0.8;
@@ -547,7 +563,6 @@ function checkCollisions() {
                 knife.r = (Math.random() - 0.5) * 0.5; 
                 playSound('metal');
                 state.shake = 25;
-                vibrate(200);
                 setTimeout(gameOver, 300);
                 return; 
             }
@@ -559,15 +574,12 @@ function checkCollisions() {
             if (diff < CONSTANTS.COLLISION_TOLERANCE * 1.5) {
                 fruit.hit = true;
                 state.applesRemaining--;
-                state.score += 10;
                 playSound('fruit');
-                vibrate(50);
                 spawnFruitSlices(state.width/2, surfaceY);
                 createParticles(state.width/2, surfaceY, 'fruit');
             }
         });
         playSound('wood');
-        vibrate(30);
         objects.stuckKnives.push({
             angle: hitAngle,
             wobblePhase: 0,
@@ -575,12 +587,12 @@ function checkCollisions() {
             flash: 5 
         });
         objects.activeKnife = null;
-        state.score++;
         state.shake = 6;
         state.logBumpY = -12; 
         createParticles(state.width/2, surfaceY, 'wood');
         if (state.applesRemaining === 0) {
             playSound('win');
+            state.score += 100; 
             const affirmIndex = Math.min(state.level - 1, CONSTANTS.AFFIRMATIONS.length - 1);
             spawnFloatingText(CONSTANTS.AFFIRMATIONS[affirmIndex], state.width/2, centerY);
             startLevelEndAnimation(); 
@@ -613,20 +625,19 @@ function spawnFloatingText(text, x, y) {
 function startLevelEndAnimation() {
     state.screen = 'animating_level_end';
     playSound('break');
-    state.shake = 30;
-    vibrate(300);
+    state.shake = 50; 
     const centerX = state.width / 2;
     const centerY = state.height * 0.33; 
     const radius = state.width * CONSTANTS.LOG_RADIUS_RATIO;
-    const pieces = 12; 
+    const pieces = 25; 
     for(let i=0; i<pieces; i++) {
         let angleStart = (i / pieces) * Math.PI * 2;
         let angleEnd = ((i + 1) / pieces) * Math.PI * 2;
         objects.logShards.push({
             x: centerX,
             y: centerY,
-            vx: Math.cos((angleStart+angleEnd)/2) * (Math.random() * 10 + 5),
-            vy: Math.sin((angleStart+angleEnd)/2) * (Math.random() * 10 + 5),
+            vx: Math.cos((angleStart+angleEnd)/2) * (Math.random() * 20 + 10),
+            vy: Math.sin((angleStart+angleEnd)/2) * (Math.random() * 20 + 10),
             rot: state.logRotation,
             rotSpeed: (Math.random() - 0.5) * 0.5,
             angleStart: angleStart,
@@ -639,7 +650,20 @@ function startLevelEndAnimation() {
 function gameOver() {
     if (state.screen === 'gameover') return;
     state.screen = 'gameover';
-    document.getElementById('final-score').innerText = state.score;
+    const currentScore = state.score;
+    let highScore = 0;
+    try {
+        highScore = parseInt(sessionStorage.getItem('knifeMasterHighScore')) || 0;
+        if (currentScore > highScore) {
+            highScore = currentScore;
+            sessionStorage.setItem('knifeMasterHighScore', highScore);
+        }
+    } catch(e) {
+        highScore = currentScore; 
+    }
+    document.getElementById('final-score').innerText = currentScore;
+    const hsEl = document.getElementById('high-score');
+    if(hsEl) hsEl.innerText = highScore;
     document.getElementById('game-over-screen').classList.add('visible');
     document.getElementById('ui-layer').classList.add('hidden');
 }
@@ -821,7 +845,7 @@ function drawLog(ctx, cx, cy, radius) {
     ctx.restore();
 }
 function drawKnifeInLog(ctx, radius, flash) {
-    const w = 18; 
+    const w = 14; 
     const h = 55; 
     ctx.translate(0, radius - 2); 
     if (flash > 0) {
@@ -889,16 +913,17 @@ function drawActiveKnife(ctx) {
     ctx.translate(k.x, k.y);
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#fff';
-    ctx.fillRect(-8, 10, 16, 50); 
-    ctx.globalAlpha = 1.0;
-    const w = 22;
     const h = k.height;
+    const total_h = (2/3) * h;
+    ctx.fillRect(-8, 10, 16, total_h); 
+    ctx.globalAlpha = 1.0;
+    const w = 14; 
     ctx.beginPath();
     ctx.moveTo(0, -h/2); 
+    ctx.lineTo(w/2, -h/3);
     ctx.lineTo(w/2, -h/6);
-    ctx.lineTo(w/2, h/6);
-    ctx.lineTo(-w/2, h/6);
     ctx.lineTo(-w/2, -h/6);
+    ctx.lineTo(-w/2, -h/3);
     ctx.closePath();
     let grd = ctx.createLinearGradient(-w, 0, w, 0);
     grd.addColorStop(0, '#cfd8dc');
@@ -907,9 +932,15 @@ function drawActiveKnife(ctx) {
     ctx.fillStyle = grd;
     ctx.fill();
     ctx.fillStyle = '#795548';
-    ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
+    ctx.fillRect(-w/2 + 2, -h/6, w - 4, h/4.2);
     ctx.fillStyle = '#ffca28';
-    ctx.fillRect(-w/2, h/6, w, 4);
+    ctx.fillRect(-w/2, -h/6, w, 4);
+    if (k.y < state.height * 0.33 + 100) { 
+        ctx.beginPath();
+        ctx.arc(0, -h/2, 3, 0, Math.PI*2); 
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+    }
     ctx.restore();
 }
 function drawReadyKnife(ctx) {
@@ -917,15 +948,15 @@ function drawReadyKnife(ctx) {
     const cx = state.width / 2;
     const cy = state.height - 40; 
     const h = state.height * CONSTANTS.KNIFE_SIZE_RATIO;
-    const w = 22;
+    const w = 14; 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.beginPath();
     ctx.moveTo(0, -h/2); 
+    ctx.lineTo(w/2, -h/3);
     ctx.lineTo(w/2, -h/6);
-    ctx.lineTo(w/2, h/6);
-    ctx.lineTo(-w/2, h/6);
     ctx.lineTo(-w/2, -h/6);
+    ctx.lineTo(-w/2, -h/3);
     ctx.closePath();
     let grd = ctx.createLinearGradient(-w, 0, w, 0);
     grd.addColorStop(0, '#cfd8dc');
@@ -934,9 +965,9 @@ function drawReadyKnife(ctx) {
     ctx.fillStyle = grd;
     ctx.fill();
     ctx.fillStyle = '#795548';
-    ctx.fillRect(-w/2 + 2, h/6, w - 4, h/3);
+    ctx.fillRect(-w/2 + 2, -h/6, w - 4, h/4.2);
     ctx.fillStyle = '#ffca28';
-    ctx.fillRect(-w/2, h/6, w, 4);
+    ctx.fillRect(-w/2, -h/6, w, 4);
     ctx.restore();
 }
 function drawParticles(ctx) {
@@ -1037,6 +1068,7 @@ function loop() {
 document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 document.getElementById('quit-btn').addEventListener('click', showConfirmation);
+document.getElementById('mute-btn').addEventListener('click', toggleMute);
 document.getElementById('confirm-yes').addEventListener('click', quitGame);
 document.getElementById('confirm-no').addEventListener('click', hideConfirmation);
 window.addEventListener('pointerdown', (e) => {
